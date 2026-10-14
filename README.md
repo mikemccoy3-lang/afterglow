@@ -15,3 +15,6 @@ Pick a Look, set Intensity, tweak Effects/Adjust, press-and-hold the photo (or S
 
 Everything runs on the GPU (WebGL) locally; photos never leave the device.
 Dev: `index.html?src=path/to/photo.jpg` auto-loads a same-origin image for testing.
+
+**Live:** https://mikemccoy3-lang.github.io/afterglow/ (GitHub Pages; push to `main` to update)
+**iPhone:** open the link in Safari → Share → Add to Home Screen.
