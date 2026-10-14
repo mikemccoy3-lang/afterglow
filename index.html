@@ -1,0 +1,602 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Afterglow">
+<meta name="theme-color" content="#0d0d0f">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="icon" href="icon-192.png">
+<title>Afterglow</title>
+<style>
+  :root {
+    --bg: #0d0d0f;
+    --panel: #16161a;
+    --line: #2a2a31;
+    --text: #ffffff;
+    --muted: #b9b9c4;
+    --accent: #ffb340;
+    --accent-ink: #1a1206;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text);
+    font: 15px/1.35 -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", sans-serif;
+    -webkit-tap-highlight-color: transparent; }
+  body { display: flex; flex-direction: column; height: 100dvh; overflow: hidden; }
+  header { display: flex; align-items: center; gap: 8px; padding: max(10px, env(safe-area-inset-top)) 16px 10px; border-bottom: 1px solid var(--line); }
+  header h1 { font-size: 18px; margin: 0 auto 0 0; letter-spacing: .5px; font-weight: 700; }
+  header h1 span { color: var(--accent); }
+  button { font: inherit; color: var(--text); background: #24242b; border: 1px solid var(--line); border-radius: 10px; padding: 8px 14px; cursor: pointer; }
+  button:active { transform: scale(.97); }
+  button.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); font-weight: 700; }
+  button:disabled { opacity: .4; pointer-events: none; }
+  #stage { flex: 1; min-height: 0; position: relative; display: flex; align-items: center; justify-content: center; padding: 12px; touch-action: none; user-select: none; -webkit-user-select: none; }
+  #view { max-width: 100%; max-height: 100%; display: none; border-radius: 4px; box-shadow: 0 8px 40px #0008; }
+  #stage.dragging { outline: 2px dashed var(--accent); outline-offset: -8px; }
+  #empty { text-align: center; color: var(--muted); }
+  #empty b { color: var(--text); display: block; font-size: 20px; margin-bottom: 6px; }
+  #beforeTag { position: absolute; top: 20px; left: 50%; transform: translateX(-50%); background: #000c; padding: 4px 12px; border-radius: 99px; font-size: 13px; font-weight: 600; display: none; }
+  #hint { position: absolute; bottom: 14px; left: 0; right: 0; text-align: center; font-size: 12px; color: var(--muted); pointer-events: none; display: none; }
+  #panel { background: var(--panel); border-top: 1px solid var(--line); height: 290px; display: flex; flex-direction: column; padding-bottom: env(safe-area-inset-bottom); }
+  nav { display: flex; border-bottom: 1px solid var(--line); }
+  nav button { flex: 1; background: none; border: 0; border-radius: 0; padding: 12px 0; color: var(--muted); font-weight: 600; border-bottom: 2px solid transparent; }
+  nav button.on { color: var(--text); border-bottom-color: var(--accent); }
+  .tab { flex: 1; overflow-y: auto; padding: 12px 16px; }
+  .tab[hidden] { display: none; }
+  .strip { display: flex; gap: 10px; overflow-x: auto; padding: 4px 0 8px; scroll-snap-type: x proximity; }
+  .look { flex: 0 0 auto; width: 78px; background: none; border: 0; padding: 0; text-align: center; scroll-snap-align: start; position: relative; }
+  .look canvas, .look .ph { width: 78px; height: 78px; border-radius: 10px; display: block; border: 2px solid transparent; background: linear-gradient(135deg, #3a3a44, #1e1e24); }
+  .look span { display: block; font-size: 12px; margin-top: 4px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .look.on canvas, .look.on .ph { border-color: var(--accent); }
+  .look.on span { color: var(--text); font-weight: 700; }
+  .look .del { position: absolute; top: -4px; right: -4px; width: 22px; height: 22px; border-radius: 50%; padding: 0; font-size: 13px; line-height: 20px; background: #000; }
+  .row { display: grid; grid-template-columns: 104px 1fr 44px; align-items: center; gap: 10px; margin: 6px 0; }
+  .row label { font-size: 13px; color: var(--muted); cursor: pointer; }
+  .row output { font-size: 13px; text-align: right; font-variant-numeric: tabular-nums; }
+  .row.changed label { color: var(--text); font-weight: 600; }
+  input[type=range] { width: 100%; accent-color: var(--accent); height: 28px; }
+  .group { font-size: 11px; text-transform: uppercase; letter-spacing: 1px; color: var(--muted); margin: 14px 0 4px; }
+  .group:first-child { margin-top: 0; }
+  .actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; }
+  .toggle { display: flex; align-items: center; gap: 10px; margin: 8px 0; font-size: 13px; }
+  .toggle input { width: 20px; height: 20px; accent-color: var(--accent); }
+  #toast { position: fixed; left: 50%; bottom: 310px; transform: translateX(-50%); background: #000e; border: 1px solid var(--line); padding: 8px 16px; border-radius: 99px; font-size: 13px; opacity: 0; transition: opacity .2s; pointer-events: none; z-index: 10; }
+  #toast.show { opacity: 1; }
+  @media (min-width: 900px) {
+    body { flex-direction: row; flex-wrap: wrap; }
+    header { width: 100%; }
+    #stage { height: calc(100dvh - 58px); }
+    #panel { width: 380px; height: calc(100dvh - 58px); border-top: 0; border-left: 1px solid var(--line); }
+    #toast { bottom: 30px; }
+  }
+</style>
+</head>
+<body>
+<header>
+  <h1>After<span>glow</span></h1>
+  <button id="openBtn">Open</button>
+  <button id="exportBtn" class="primary" disabled>Export</button>
+</header>
+
+<main id="stage">
+  <div id="empty"><b>Drop a photo here</b>or tap Open</div>
+  <canvas id="view"></canvas>
+  <div id="beforeTag">Original</div>
+  <div id="hint">Press and hold the photo (or Space) to compare</div>
+</main>
+
+<section id="panel">
+  <nav>
+    <button data-tab="looks" class="on">Looks</button>
+    <button data-tab="effects">Effects</button>
+    <button data-tab="adjust">Adjust</button>
+  </nav>
+  <div class="tab" id="tab-looks">
+    <div class="strip" id="looks"></div>
+    <div class="row"><label for="intensity">Intensity</label><input type="range" id="intensity" min="0" max="150" value="100"><output id="intensityOut">100</output></div>
+    <div class="actions">
+      <button id="saveLookBtn" disabled>Save as my look</button>
+      <button id="shuffleBtn" disabled>Shuffle grain/dust</button>
+      <button id="resetBtn" disabled>Reset tweaks</button>
+    </div>
+  </div>
+  <div class="tab" id="tab-effects" hidden></div>
+  <div class="tab" id="tab-adjust" hidden></div>
+</section>
+
+<input type="file" id="file" accept="image/*" hidden>
+<div id="toast"></div>
+
+<script>
+'use strict';
+
+// ---------- Parameter definitions (UI units) ----------
+// key, label, tab, group, min, max, default, scalesWithIntensity
+const DEFS = [
+  ['exposure',   'Exposure',    'adjust',  'Light',   -100, 100, 0],
+  ['contrast',   'Contrast',    'adjust',  'Light',   -100, 100, 0],
+  ['highlights', 'Highlights',  'adjust',  'Light',   -100, 100, 0],
+  ['shadows',    'Shadows',     'adjust',  'Light',   -100, 100, 0],
+  ['fade',       'Fade',        'adjust',  'Light',      0, 100, 0],
+  ['saturation', 'Saturation',  'adjust',  'Color',   -100, 100, 0],
+  ['vibrance',   'Vibrance',    'adjust',  'Color',   -100, 100, 0],
+  ['warmth',     'Warmth',      'adjust',  'Color',   -100, 100, 0],
+  ['tint',       'Tint',        'adjust',  'Color',   -100, 100, 0],
+  ['sharpen',    'Sharpen',     'adjust',  'Detail',  -100, 100, 0],
+  ['splitAmt',       'Split tone',     'effects', 'Color grade', 0, 100, 0],
+  ['splitShadowHue', 'Shadow hue',     'effects', 'Color grade', 0, 360, 200, false],
+  ['splitHighHue',   'Highlight hue',  'effects', 'Color grade', 0, 360, 35, false],
+  ['grain',      'Grain',       'effects', 'Film',       0, 100, 0],
+  ['grainSize',  'Grain size',  'effects', 'Film',      50, 400, 150, false],
+  ['dust',       'Dust & scratches', 'effects', 'Film',  0, 100, 0],
+  ['halation',   'Halation',    'effects', 'Film',       0, 100, 0],
+  ['vignette',   'Vignette',    'effects', 'Film',       0, 100, 0],
+  ['bloom',      'Glow',        'effects', 'Light FX',   0, 100, 0],
+  ['leak',       'Light leak',  'effects', 'Light FX',   0, 100, 0],
+  ['leakHue',    'Leak color',  'effects', 'Light FX',   0, 360, 25, false],
+  ['leakPos',    'Leak angle',  'effects', 'Light FX',   0, 100, 60, false],
+  ['rgbSplit',   'RGB split',   'effects', 'Retro',      0, 100, 0],
+  ['scanlines',  'VHS lines',   'effects', 'Retro',      0, 100, 0],
+].map(([key, label, tab, group, min, max, def, scales = true]) => ({ key, label, tab, group, min, max, def, scales }));
+const DEF = Object.fromEntries(DEFS.map(d => [d.key, d]));
+
+// ---------- Built-in looks ----------
+const BUILTIN = [
+  { name: 'Original', p: {} },
+  { name: 'Kodak Gold', p: { warmth: 35, saturation: 15, contrast: 10, fade: 15, splitAmt: 30, splitHighHue: 40, splitShadowHue: 210, grain: 35, halation: 20, vignette: 20 } },
+  { name: 'Portra', p: { warmth: 15, saturation: -10, contrast: -5, fade: 20, shadows: 20, splitAmt: 22, splitHighHue: 30, splitShadowHue: 190, grain: 25 } },
+  { name: 'Fuji 400H', p: { warmth: -10, tint: -15, fade: 22, saturation: -5, splitAmt: 30, splitShadowHue: 165, splitHighHue: 50, grain: 30 } },
+  { name: 'Cinematic', p: { contrast: 20, saturation: -5, splitAmt: 60, splitShadowHue: 190, splitHighHue: 30, vignette: 30, grain: 15, bloom: 10 } },
+  { name: 'Moody Garage', p: { contrast: 30, shadows: -20, saturation: -25, splitAmt: 40, splitShadowHue: 205, splitHighHue: 40, vignette: 45, grain: 20, sharpen: 20 } },
+  { name: 'Chrome Pop', p: { contrast: 25, vibrance: 40, sharpen: 50, highlights: -20, shadows: 20 } },
+  { name: 'Golden Hour', p: { warmth: 50, tint: 5, highlights: 20, bloom: 30, saturation: 10, leak: 30, leakHue: 30, leakPos: 15 } },
+  { name: 'Dreamy', p: { bloom: 70, fade: 30, contrast: -15, saturation: -10, warmth: 10, highlights: 20, sharpen: -30 } },
+  { name: 'Light Leak', p: { leak: 70, leakHue: 18, leakPos: 55, warmth: 20, fade: 15, grain: 25 } },
+  { name: 'Dusty 70s', p: { warmth: 40, fade: 35, saturation: -20, dust: 60, grain: 50, grainSize: 200, vignette: 35, splitAmt: 30, splitHighHue: 40 } },
+  { name: 'Noir', p: { saturation: -100, contrast: 45, vignette: 50, grain: 40, fade: 5 } },
+  { name: 'VHS', p: { rgbSplit: 55, scanlines: 50, saturation: 20, fade: 25, warmth: 10, grain: 30, bloom: 25, sharpen: -25 }, stamp: true },
+  { name: 'Y2K Digicam', p: { exposure: 10, contrast: 10, saturation: 25, warmth: -10, bloom: 30, sharpen: 30 }, stamp: true },
+  { name: 'Glitch', p: { rgbSplit: 100, scanlines: 30, saturation: 30, contrast: 20 } },
+];
+
+// ---------- Shaders ----------
+const VERT = `attribute vec2 a_pos; varying vec2 v_uv;
+void main(){ v_uv = a_pos*0.5+0.5; gl_Position = vec4(a_pos,0.0,1.0); }`;
+
+const FRAG = `precision highp float;
+varying vec2 v_uv;
+uniform sampler2D u_img;
+uniform vec2 u_res;
+uniform float u_seed, u_bypass;
+${DEFS.map(d => 'uniform float u_' + d.key + ';').join('\n')}
+const vec3 LW = vec3(0.2126, 0.7152, 0.0722);
+float hash(vec2 p){ p = fract(p*vec2(123.34, 456.21)); p += dot(p, p+45.32); return fract(p.x*p.y); }
+float vnoise(vec2 p){ vec2 i = floor(p), f = fract(p); f = f*f*(3.0-2.0*f);
+  return mix(mix(hash(i), hash(i+vec2(1,0)), f.x), mix(hash(i+vec2(0,1)), hash(i+vec2(1,1)), f.x), f.y); }
+vec3 hsv(float h, float s, float v){ vec3 k = clamp(abs(mod(h*6.0+vec3(0,4,2), 6.0)-3.0)-1.0, 0.0, 1.0); return v*mix(vec3(1.0), k, s); }
+vec3 toneOf(float h){ vec3 c = hsv(h, 1.0, 1.0); return c - dot(c, LW); }
+vec3 tex(vec2 uv){ return texture2D(u_img, clamp(uv, 0.0, 1.0)).rgb; }
+
+void main(){
+  vec2 uv = v_uv;
+  if (u_bypass > 0.5) { gl_FragColor = vec4(tex(uv), 1.0); return; }
+  float asp = u_res.x / u_res.y;
+
+  // VHS tracking wobble
+  if (u_scanlines > 0.0) uv.x += (hash(vec2(floor(uv.y*240.0), u_seed)) - 0.5) * 0.004 * u_scanlines;
+
+  // RGB split / chromatic aberration
+  vec3 c;
+  if (u_rgbSplit > 0.0) {
+    vec2 dir = (uv - 0.5) * u_rgbSplit * 0.02 + vec2(u_rgbSplit * 0.004 / asp, 0.0);
+    c = vec3(tex(uv + dir).r, tex(uv).g, tex(uv - dir).b);
+  } else c = tex(uv);
+
+  // Sharpen (+) / soften (-), resolution-independent radius
+  if (u_sharpen != 0.0) {
+    vec2 o = vec2(0.0012 / asp, 0.0012);
+    vec3 b = (tex(uv+vec2(o.x,0.0)) + tex(uv-vec2(o.x,0.0)) + tex(uv+vec2(0.0,o.y)) + tex(uv-vec2(0.0,o.y))) * 0.25;
+    c += (c - b) * u_sharpen * (u_sharpen > 0.0 ? 2.5 : 1.0);
+  }
+
+  // Glow + halation from bright areas (golden-angle spiral blur)
+  if (u_bloom > 0.0 || u_halation > 0.0) {
+    vec3 acc = vec3(0.0);
+    for (int i = 0; i < 32; i++) {
+      float fi = float(i);
+      float r = sqrt((fi + 0.5) / 32.0) * 0.04;
+      float a = fi * 2.39996;
+      vec3 s = tex(uv + vec2(cos(a) / asp, sin(a)) * r);
+      acc += max(s - 0.5, 0.0) / 0.5;
+    }
+    acc /= 32.0;
+    c += acc * u_bloom * 1.4;
+    c += dot(acc, LW) * vec3(1.0, 0.38, 0.12) * u_halation * 1.6;
+  }
+
+  // Exposure, white balance
+  c *= exp2(u_exposure * 1.5);
+  c.r *= 1.0 + u_warmth * 0.12;
+  c.b *= 1.0 - u_warmth * 0.12;
+  c.g *= 1.0 - u_tint * 0.08;
+
+  // Shadows / highlights
+  float L = dot(c, LW);
+  c += u_shadows * 0.3 * (1.0 - smoothstep(0.0, 0.55, L));
+  c += u_highlights * 0.3 * smoothstep(0.45, 1.0, L);
+
+  // Contrast (pivot at mid grey)
+  c = (c - 0.5) * (1.0 + u_contrast * 0.8) + 0.5;
+
+  // Saturation + vibrance (vibrance boosts muted colors more)
+  L = dot(c, LW);
+  float curS = max(c.r, max(c.g, c.b)) - min(c.r, min(c.g, c.b));
+  float sat = 1.0 + u_saturation + u_vibrance * (1.0 - clamp(curS, 0.0, 1.0));
+  c = mix(vec3(L), c, max(sat, 0.0));
+
+  // Split toning
+  L = clamp(dot(c, LW), 0.0, 1.0);
+  c += u_splitAmt * 0.25 * (toneOf(u_splitShadowHue) * (1.0 - L) + toneOf(u_splitHighHue) * L);
+
+  // Fade: lifted blacks, softer whites
+  c = c * (1.0 - u_fade * 0.22) + u_fade * 0.12;
+  c = clamp(c, 0.0, 1.0);
+
+  // Light leak (screen blend)
+  if (u_leak > 0.0) {
+    float ang = u_leakPos * 6.2832;
+    vec2 p = vec2(0.5) + vec2(cos(ang), sin(ang)) * 0.72;
+    vec2 d = (v_uv - p) * vec2(asp, 1.0);
+    float m = pow(clamp(1.0 - length(d) / (0.9 + 0.2 * vnoise(v_uv * 3.0 + u_seed)), 0.0, 1.0), 2.0);
+    vec3 lc = clamp(hsv(u_leakHue, 0.85, 1.0) * m * u_leak * 1.3, 0.0, 1.0);
+    c = 1.0 - (1.0 - c) * (1.0 - lc);
+  }
+
+  // VHS scanlines
+  if (u_scanlines > 0.0) {
+    float s = 0.5 + 0.5 * sin(v_uv.y * 6.2832 * 260.0);
+    c *= 1.0 - u_scanlines * 0.22 * s;
+  }
+
+  // Vignette
+  float vd = length((v_uv - 0.5)) * 1.414;
+  c *= 1.0 - u_vignette * 0.9 * smoothstep(0.35, 1.1, vd);
+
+  // Dust specks + scratches
+  if (u_dust > 0.0) {
+    vec2 g = v_uv * vec2(asp, 1.0) * 90.0;
+    vec2 cell = floor(g), f = fract(g);
+    if (hash(cell + u_seed * 7.0) > 1.0 - 0.035 * u_dust) {
+      vec2 ctr = vec2(hash(cell + 1.3 + u_seed), hash(cell + 2.7 + u_seed));
+      float rad = 0.06 + 0.22 * hash(cell + 4.1);
+      float spk = 1.0 - smoothstep(rad * 0.4, rad, length(f - ctr));
+      vec3 dc = hash(cell + 9.0) > 0.4 ? vec3(0.95, 0.93, 0.88) : vec3(0.06);
+      c = mix(c, dc, spk * 0.85);
+    }
+    float col = floor(v_uv.x * 500.0);
+    if (hash(vec2(col, u_seed)) > 1.0 - 0.006 * u_dust) {
+      float line = 1.0 - smoothstep(0.0, 0.3, abs(fract(v_uv.x * 500.0) - 0.5));
+      float seg = step(0.35, hash(vec2(col, floor(v_uv.y * 5.0) + u_seed)));
+      c = mix(c, vec3(0.92), line * seg * 0.55 * u_dust);
+    }
+  }
+
+  // Film grain (size scales with output resolution so preview == export)
+  if (u_grain > 0.0) {
+    float gs = max(u_grainSize, 0.3) * u_res.y / 1080.0;
+    vec2 gp = gl_FragCoord.xy / gs;
+    float n = vnoise(gp + u_seed * 13.0) + vnoise(gp * 1.9 + u_seed * 5.0 + 3.1) - 1.0;
+    L = dot(c, LW);
+    float w = 1.0 - pow(abs(L - 0.5) * 2.0, 2.0) * 0.6;
+    c += n * u_grain * 0.35 * w;
+  }
+
+  gl_FragColor = vec4(clamp(c, 0.0, 1.0), 1.0);
+}`;
+
+// ---------- WebGL renderer ----------
+class Renderer {
+  constructor(canvas = document.createElement('canvas')) {
+    this.canvas = canvas;
+    const gl = this.gl = canvas.getContext('webgl', { preserveDrawingBuffer: true, premultipliedAlpha: false, antialias: false });
+    if (!gl) throw new Error('WebGL is not available in this browser.');
+    const sh = (type, src) => { const s = gl.createShader(type); gl.shaderSource(s, src); gl.compileShader(s);
+      if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) throw new Error(gl.getShaderInfoLog(s)); return s; };
+    const prog = gl.createProgram();
+    gl.attachShader(prog, sh(gl.VERTEX_SHADER, VERT));
+    gl.attachShader(prog, sh(gl.FRAGMENT_SHADER, FRAG));
+    gl.linkProgram(prog);
+    if (!gl.getProgramParameter(prog, gl.LINK_STATUS)) throw new Error(gl.getProgramInfoLog(prog));
+    gl.useProgram(prog);
+    gl.bindBuffer(gl.ARRAY_BUFFER, gl.createBuffer());
+    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 1, -1, -1, 1, 1, 1]), gl.STATIC_DRAW);
+    const loc = gl.getAttribLocation(prog, 'a_pos');
+    gl.enableVertexAttribArray(loc);
+    gl.vertexAttribPointer(loc, 2, gl.FLOAT, false, 0, 0);
+    this.u = {};
+    for (const n of ['u_res', 'u_seed', 'u_bypass', ...DEFS.map(d => 'u_' + d.key)]) this.u[n] = gl.getUniformLocation(prog, n);
+    this.tex = gl.createTexture();
+    gl.bindTexture(gl.TEXTURE_2D, this.tex);
+    for (const [k, v] of [[gl.TEXTURE_MIN_FILTER, gl.LINEAR], [gl.TEXTURE_MAG_FILTER, gl.LINEAR], [gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE], [gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE]])
+      gl.texParameteri(gl.TEXTURE_2D, k, v);
+    this.maxTex = gl.getParameter(gl.MAX_TEXTURE_SIZE);
+  }
+  setImage(src) {
+    const gl = this.gl;
+    gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGB, gl.RGB, gl.UNSIGNED_BYTE, src);
+    this.w = src.width; this.h = src.height;
+  }
+  render(params, seed, bypass = false) {
+    const gl = this.gl;
+    this.canvas.width = this.w; this.canvas.height = this.h;
+    gl.viewport(0, 0, this.w, this.h);
+    gl.uniform2f(this.u.u_res, this.w, this.h);
+    gl.uniform1f(this.u.u_seed, seed);
+    gl.uniform1f(this.u.u_bypass, bypass ? 1 : 0);
+    for (const d of DEFS) gl.uniform1f(this.u['u_' + d.key], toShader(d, params[d.key]));
+    gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+    return this.canvas;
+  }
+  dispose() { this.gl.getExtension('WEBGL_lose_context')?.loseContext(); }
+}
+
+function toShader(d, v) {
+  if (d.max === 360) return v / 360;            // hues
+  if (d.key === 'grainSize') return v / 100;    // px at 1080p
+  return v / 100;
+}
+
+// ---------- Helpers ----------
+const $ = id => document.getElementById(id);
+const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
+
+function scaledCanvas(img, maxEdge) {
+  const s = Math.min(1, maxEdge / Math.max(img.width, img.height));
+  const c = document.createElement('canvas');
+  c.width = Math.max(1, Math.round(img.width * s));
+  c.height = Math.max(1, Math.round(img.height * s));
+  c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+  return c;
+}
+
+function drawStamp(ctx, w, h, date) {
+  const d = date || new Date();
+  const txt = `'${String(d.getFullYear()).slice(2)} ${String(d.getMonth() + 1).padStart(2, '0')} ${String(d.getDate()).padStart(2, '0')}`;
+  const size = Math.round(Math.min(w, h) * 0.05);
+  ctx.save();
+  ctx.font = `bold ${size}px "Courier New", ui-monospace, monospace`;
+  ctx.textAlign = 'right'; ctx.textBaseline = 'bottom';
+  ctx.shadowColor = 'rgba(255,140,40,0.9)'; ctx.shadowBlur = size * 0.4;
+  ctx.fillStyle = '#ffa53a';
+  ctx.fillText(txt, w - w * 0.05, h - h * 0.05);
+  ctx.restore();
+}
+
+let toastTimer;
+function toast(msg) { const t = $('toast'); t.textContent = msg; t.classList.add('show'); clearTimeout(toastTimer); toastTimer = setTimeout(() => t.classList.remove('show'), 1800); }
+
+// ---------- Storage (custom looks) ----------
+const STORE_KEY = 'afterglow.looks.v1';
+function loadCustom() { try { return JSON.parse(localStorage.getItem(STORE_KEY)) || []; } catch { return []; } }
+function saveCustom(list) { try { localStorage.setItem(STORE_KEY, JSON.stringify(list)); return true; } catch { return false; } }
+
+// ---------- App state ----------
+const state = {
+  img: null, fileName: 'photo', fileDate: null,
+  look: BUILTIN[0], intensity: 100, delta: {}, stampOverride: null,
+  seed: Math.random() * 100, bypass: false,
+};
+let custom = loadCustom();
+const preview = new Renderer();
+const thumbR = new Renderer();
+const view = $('view'), vctx = view.getContext('2d');
+
+function baseValue(key) {
+  const d = DEF[key];
+  const v = state.look.p[key] ?? d.def;
+  return d.scales ? d.def + (v - d.def) * state.intensity / 100 : v;
+}
+function params() {
+  const p = {};
+  for (const d of DEFS) p[d.key] = clamp(baseValue(d.key) + (state.delta[d.key] || 0), d.min, d.max);
+  return p;
+}
+const stampOn = () => state.stampOverride ?? (!!state.look.stamp && state.intensity > 0);
+
+// ---------- Rendering ----------
+let raf = 0;
+function draw() {
+  if (raf || !state.img) return;
+  raf = requestAnimationFrame(() => {
+    raf = 0;
+    const src = preview.render(params(), state.seed, state.bypass);
+    view.width = src.width; view.height = src.height;
+    vctx.drawImage(src, 0, 0);
+    if (!state.bypass && stampOn()) drawStamp(vctx, view.width, view.height, state.fileDate);
+  });
+}
+
+function loadImage(img, name = 'photo', date = null) {
+  state.img = img; state.fileName = name.replace(/\.[^.]+$/, ''); state.fileDate = date;
+  const pv = scaledCanvas(img, Math.min(preview.maxTex, 1600));
+  preview.setImage(pv);
+  thumbR.setImage(scaledCanvas(img, 220));
+  $('empty').style.display = 'none';
+  view.style.display = 'block';
+  $('hint').style.display = 'block';
+  setTimeout(() => $('hint').style.display = 'none', 3500);
+  for (const id of ['exportBtn', 'saveLookBtn', 'shuffleBtn', 'resetBtn']) $(id).disabled = false;
+  buildLooks();
+  draw();
+}
+
+function openFile(file) {
+  if (!file || !file.type.startsWith('image/')) return toast('That is not an image');
+  const url = URL.createObjectURL(file);
+  const img = new Image();
+  img.onload = () => { loadImage(img, file.name, file.lastModified ? new Date(file.lastModified) : null); URL.revokeObjectURL(url); };
+  img.onerror = () => toast('Could not read that image (try JPEG/PNG)');
+  img.src = url;
+}
+
+// ---------- Looks strip ----------
+function allLooks() { return [...BUILTIN, ...custom.map(c => ({ ...c, custom: true }))]; }
+
+function buildLooks() {
+  const strip = $('looks');
+  strip.innerHTML = '';
+  for (const look of allLooks()) {
+    const b = document.createElement('button');
+    b.className = 'look' + (look === state.look || (look.custom && state.look.custom && look.name === state.look.name) ? ' on' : '');
+    let thumb;
+    if (state.img) {
+      thumb = document.createElement('canvas');
+      thumb.width = thumb.height = 156;
+      const full = {}; for (const d of DEFS) full[d.key] = look.p[d.key] ?? d.def;
+      const src = thumbR.render(full, state.seed);
+      const s = Math.min(src.width, src.height);
+      const tctx = thumb.getContext('2d');
+      tctx.drawImage(src, (src.width - s) / 2, (src.height - s) / 2, s, s, 0, 0, 156, 156);
+      if (look.stamp) drawStamp(tctx, 156, 156, state.fileDate);
+    } else {
+      thumb = document.createElement('div'); thumb.className = 'ph';
+    }
+    const label = document.createElement('span'); label.textContent = look.name;
+    b.append(thumb, label);
+    b.onclick = () => selectLook(look);
+    if (look.custom) {
+      const x = document.createElement('button'); x.className = 'del'; x.textContent = '×'; x.title = 'Delete look';
+      x.onclick = e => { e.stopPropagation(); if (confirm(`Delete "${look.name}"?`)) { custom = custom.filter(c => c.name !== look.name); saveCustom(custom); if (state.look.name === look.name) selectLook(BUILTIN[0]); else buildLooks(); } };
+      b.append(x);
+    }
+    strip.append(b);
+  }
+}
+
+function selectLook(look) {
+  state.look = look; state.delta = {}; state.stampOverride = null;
+  state.intensity = 100;
+  $('intensity').value = 100; $('intensityOut').textContent = 100;
+  for (const el of $('looks').children) el.classList.toggle('on', el.querySelector('span').textContent === look.name);
+  syncSliders(); draw();
+}
+
+// ---------- Sliders ----------
+const sliderEls = {};
+function buildSliders() {
+  for (const tab of ['effects', 'adjust']) {
+    const host = $('tab-' + tab);
+    let group = '';
+    for (const d of DEFS.filter(d => d.tab === tab)) {
+      if (d.group !== group) { group = d.group; const g = document.createElement('div'); g.className = 'group'; g.textContent = group; host.append(g); }
+      const row = document.createElement('div'); row.className = 'row';
+      row.innerHTML = `<label for="s_${d.key}" title="Double-click to reset">${d.label}</label><input type="range" id="s_${d.key}" min="${d.min}" max="${d.max}" step="1"><output></output>`;
+      const input = row.querySelector('input'), out = row.querySelector('output');
+      input.oninput = () => { state.delta[d.key] = +input.value - baseValue(d.key); out.textContent = input.value; row.classList.toggle('changed', +input.value !== d.def); draw(); };
+      row.querySelector('label').ondblclick = () => { delete state.delta[d.key]; syncSliders(); draw(); };
+      sliderEls[d.key] = { row, input, out };
+      host.append(row);
+    }
+    if (tab === 'effects') {
+      const t = document.createElement('label'); t.className = 'toggle';
+      t.innerHTML = `<input type="checkbox" id="stampToggle"> Retro date stamp`;
+      host.append(t);
+      t.querySelector('input').onchange = e => { state.stampOverride = e.target.checked; draw(); };
+    }
+  }
+  syncSliders();
+}
+function syncSliders() {
+  const p = params();
+  for (const d of DEFS) {
+    const { row, input, out } = sliderEls[d.key];
+    input.value = Math.round(p[d.key]); out.textContent = Math.round(p[d.key]);
+    row.classList.toggle('changed', Math.round(p[d.key]) !== d.def);
+  }
+  const st = $('stampToggle'); if (st) st.checked = stampOn();
+}
+
+// ---------- Export ----------
+async function exportImage() {
+  if (!state.img) return;
+  $('exportBtn').disabled = true; toast('Rendering full resolution…');
+  await new Promise(r => setTimeout(r, 30));
+  let r;
+  try {
+    r = new Renderer();
+    const src = scaledCanvas(state.img, Math.min(r.maxTex, 6000));
+    r.setImage(src);
+    const glc = r.render(params(), state.seed);
+    const out = document.createElement('canvas'); out.width = glc.width; out.height = glc.height;
+    const ctx = out.getContext('2d'); ctx.drawImage(glc, 0, 0);
+    if (stampOn()) drawStamp(ctx, out.width, out.height, state.fileDate);
+    r.dispose(); r = null;
+    const blob = await new Promise(res => out.toBlob(res, 'image/jpeg', 0.94));
+    const name = `${state.fileName}-${state.look.name.toLowerCase().replace(/\W+/g, '-')}.jpg`;
+    const file = new File([blob], name, { type: 'image/jpeg' });
+    const touch = matchMedia('(pointer: coarse)').matches;
+    if (touch && navigator.canShare && navigator.canShare({ files: [file] })) {
+      await navigator.share({ files: [file] }).catch(() => {});
+    } else {
+      const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name; a.click();
+      setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+      toast(`Saved ${out.width}×${out.height} JPEG`);
+    }
+  } catch (e) { console.error(e); toast('Export failed: ' + e.message); r?.dispose(); }
+  $('exportBtn').disabled = false;
+}
+
+// ---------- Wiring ----------
+$('openBtn').onclick = () => $('file').click();
+$('file').onchange = e => { openFile(e.target.files[0]); e.target.value = ''; };
+$('exportBtn').onclick = exportImage;
+$('intensity').oninput = e => { state.intensity = +e.target.value; $('intensityOut').textContent = e.target.value; syncSliders(); draw(); };
+$('shuffleBtn').onclick = () => { state.seed = Math.random() * 100; draw(); };
+$('resetBtn').onclick = () => { state.delta = {}; state.stampOverride = null; syncSliders(); draw(); toast('Tweaks cleared'); };
+$('saveLookBtn').onclick = () => {
+  const name = (prompt('Name this look:', state.look.name === 'Original' ? 'My Look' : state.look.name + ' (mine)') || '').trim();
+  if (!name) return;
+  const p = params();
+  const look = { name, p, stamp: stampOn() };
+  custom = custom.filter(c => c.name !== name).concat(look);
+  if (!saveCustom(custom)) toast('Saved for this session only (storage blocked)');
+  state.look = { ...look, custom: true }; state.intensity = 100; state.delta = {}; state.stampOverride = null;
+  $('intensity').value = 100; $('intensityOut').textContent = 100;
+  buildLooks(); syncSliders(); draw(); toast(`Saved "${name}"`);
+};
+document.querySelectorAll('nav button').forEach(b => b.onclick = () => {
+  document.querySelectorAll('nav button').forEach(x => x.classList.toggle('on', x === b));
+  document.querySelectorAll('.tab').forEach(t => t.hidden = t.id !== 'tab-' + b.dataset.tab);
+});
+
+// Press-and-hold to compare
+const setBypass = on => { if (!state.img || state.bypass === on) return; state.bypass = on; $('beforeTag').style.display = on ? 'block' : 'none'; draw(); };
+view.addEventListener('pointerdown', () => setBypass(true));
+for (const ev of ['pointerup', 'pointerleave', 'pointercancel']) view.addEventListener(ev, () => setBypass(false));
+addEventListener('keydown', e => { if (e.code === 'Space' && e.target.tagName !== 'INPUT') { e.preventDefault(); setBypass(true); } });
+addEventListener('keyup', e => { if (e.code === 'Space') setBypass(false); });
+
+// Drag-and-drop + paste
+const stage = $('stage');
+stage.addEventListener('dragover', e => { e.preventDefault(); stage.classList.add('dragging'); });
+stage.addEventListener('dragleave', () => stage.classList.remove('dragging'));
+stage.addEventListener('drop', e => { e.preventDefault(); stage.classList.remove('dragging'); openFile(e.dataTransfer.files[0]); });
+addEventListener('paste', e => { const f = [...e.clipboardData.files].find(f => f.type.startsWith('image/')); if (f) openFile(f); });
+$('empty').onclick = () => $('file').click();
+
+buildSliders();
+buildLooks();
+
+// Offline / home-screen support (only over http(s), not file://)
+if ('serviceWorker' in navigator && location.protocol.startsWith('http')) navigator.serviceWorker.register('sw.js').catch(() => {});
+
+// Dev helper: ?src=path/to/image.jpg (same-origin only)
+const qs = new URLSearchParams(location.search).get('src');
+if (qs) { const img = new Image(); img.onload = () => loadImage(img, qs.split('/').pop()); img.src = qs; }
+</script>
+</body>
+</html>
