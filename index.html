@@ -111,6 +111,10 @@
 <div id="toast"></div>
 
 <script>
+// Show any startup/runtime error on screen (no dev tools on iPhone)
+addEventListener('error', e => { const el = document.getElementById('empty'); if (el) { el.style.display = 'block'; el.innerHTML = '<b>Something broke</b>' + (e.message || 'unknown error'); } });
+</script>
+<script>
 'use strict';
 
 // ---------- Parameter definitions (UI units) ----------
@@ -354,8 +358,10 @@ function toShader(d, v) {
 const $ = id => document.getElementById(id);
 const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
 
+// iOS Safari rejects canvases above ~16.7MP, so cap total pixels too
+const MAX_PIXELS = 16_000_000;
 function scaledCanvas(img, maxEdge) {
-  const s = Math.min(1, maxEdge / Math.max(img.width, img.height));
+  const s = Math.min(1, maxEdge / Math.max(img.width, img.height), Math.sqrt(MAX_PIXELS / (img.width * img.height)));
   const c = document.createElement('canvas');
   c.width = Math.max(1, Math.round(img.width * s));
   c.height = Math.max(1, Math.round(img.height * s));
@@ -391,8 +397,9 @@ const state = {
   seed: Math.random() * 100, bypass: false,
 };
 let custom = loadCustom();
-const preview = new Renderer();
-const thumbR = new Renderer();
+let preview, thumbR;
+try { preview = new Renderer(); thumbR = new Renderer(); }
+catch (e) { document.getElementById('empty').innerHTML = '<b>This browser can’t run Afterglow</b>' + e.message; throw e; }
 const view = $('view'), vctx = view.getContext('2d');
 
 function baseValue(key) {
@@ -536,6 +543,7 @@ async function exportImage() {
     if (stampOn()) drawStamp(ctx, out.width, out.height, state.fileDate);
     r.dispose(); r = null;
     const blob = await new Promise(res => out.toBlob(res, 'image/jpeg', 0.94));
+    if (!blob) throw new Error('image too large for this device');
     const name = `${state.fileName}-${state.look.name.toLowerCase().replace(/\W+/g, '-')}.jpg`;
     const file = new File([blob], name, { type: 'image/jpeg' });
     const touch = matchMedia('(pointer: coarse)').matches;
